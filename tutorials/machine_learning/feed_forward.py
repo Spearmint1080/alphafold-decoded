@@ -34,7 +34,8 @@ def affine_forward(x, W, b):
     ##########################################################################
 
     # Replace "pass" statement with your code
-    pass
+    out = torch.einsum('ij,kj->ik', x, W) + b
+    cache = (x, W)
 
     ##########################################################################
     #               END OF YOUR CODE                                         #
@@ -69,7 +70,10 @@ def affine_backward(dout, cache):
     ##########################################################################
 
     # Replace "pass" statement with your code
-    pass
+    x,W = cache
+    dx = torch.einsum('ij,jk->ik', dout, W)  # dout * W
+    dW = torch.einsum('ij,ik->kj', x, dout)  # X^T * dout
+    db = dout.sum(dim=0)  # sum over batch
 
     ##########################################################################
     #               END OF YOUR CODE                                         #
@@ -101,7 +105,8 @@ def relu_forward(x):
     ##########################################################################
 
     # Replace "pass" statement with your code
-    pass
+    out = torch.relu(x)
+    cache = (x>=0,)
 
     ##########################################################################
     #               END OF YOUR CODE                                         #
@@ -134,7 +139,7 @@ def relu_backward(dout, cache):
     ##########################################################################
 
     # Replace "pass" statement with your code
-    pass
+    dx = dout * cache[0].float()
 
     ##########################################################################
     #               END OF YOUR CODE                                         #
@@ -165,7 +170,8 @@ def sigmoid_forward(x):
     ##########################################################################
 
     # Replace "pass" statement with your code
-    pass
+    out = torch.sigmoid(x)
+    cache = (out,)
 
     ##########################################################################
     #               END OF YOUR CODE                                         #
@@ -197,7 +203,8 @@ def sigmoid_backward(dout, cache):
     ##########################################################################
 
     # Replace "pass" statement with your code
-    pass
+    out = cache[0]
+    dx = dout * out * (1 - out)
 
     ##########################################################################
     #               END OF YOUR CODE                                         #
@@ -233,7 +240,10 @@ def l2_loss(y, y_hat):
     ##########################################################################
 
     # Replace "pass" statement with your code
-    pass
+    N, num_classes = y.shape
+    y_hat_onehot = nn.functional.one_hot(y_hat, num_classes=num_classes)
+    loss = 1/N* torch.sum((y - y_hat_onehot) ** 2)
+    dy = 1/N * 2 * (y - y_hat_onehot)
 
     ##########################################################################
     #               END OF YOUR CODE                                         #
@@ -264,7 +274,9 @@ def calculate_accuracy(model, input_data, labels):
     ##########################################################################
 
     # Replace "pass" statement with your code
-    pass
+    out, _ = model.forward(input_data)
+    preds = out.argmax(dim=1)
+    accuracy = (preds == labels).float().mean()
 
     ##########################################################################
     #               END OF YOUR CODE                                         #
@@ -298,7 +310,10 @@ class TwoLayerNet:
         ##########################################################################
 
         # Replace "pass" statement with your code
-        pass
+        self.params['W1'] = torch.randn(hidden_dim, inp_dim) * math.sqrt(2. / inp_dim)
+        self.params['b1'] = torch.zeros(hidden_dim)
+        self.params['W2'] = torch.randn(out_dim, hidden_dim) * math.sqrt(2. / (hidden_dim + out_dim))
+        self.params['b2'] = torch.zeros(out_dim)
 
         ##########################################################################
         #               END OF YOUR CODE                                         #
@@ -326,8 +341,11 @@ class TwoLayerNet:
         ##########################################################################
 
         # Replace "pass" statement with your code
-        pass
-
+        out, cache1 = affine_forward(x, self.params['W1'], self.params['b1'])
+        out, cache2 = relu_forward(out)
+        out, cache3 = affine_forward(out, self.params['W2'], self.params['b2'])
+        out, cache4 = sigmoid_forward(out)
+        cache = (cache1, cache2, cache3, cache4)
         ##########################################################################
         #               END OF YOUR CODE                                         #
         ##########################################################################
@@ -350,7 +368,10 @@ class TwoLayerNet:
         ##########################################################################
 
         # Replace "pass" statement with your code
-        pass
+        cache1, cache2, cache3, cache4 = cache
+        dout, self.grads['W2'], self.grads['b2'] = affine_backward(dout, cache3)
+        dout = sigmoid_backward(dout, cache4)
+        dout, self.grads['W1'], self.grads['b1'] = affine_backward(dout, cache1)
 
         ##########################################################################
         #               END OF YOUR CODE                                         #
@@ -396,7 +417,33 @@ def train_model(model, train_data, train_labels, validation_data, validation_lab
     ##########################################################################
 
     # Replace "pass" statement with your code
-    pass
+    train_data = train_data[:N - N % batch_size]
+    train_labels = train_labels[:N - N % batch_size]
+    val_data = validation_data
+    val_labels = validation_labels
+
+    for epoch in range(n_epochs):
+        for i in range(0, train_data.size(0), batch_size):
+            x_batch = train_data[i:i + batch_size]
+            y_batch = train_labels[i:i + batch_size]
+
+            # Forward pass
+            out, cache = model.forward(x_batch)
+
+            # Compute loss and gradient
+            loss,dout = l2_loss(out, y_batch)
+
+            # Backward pass
+            model.backward(dout, cache)
+
+            # Update parameters
+            for param in model.params:
+                model.params[param] -= learning_rate * model.grads[param]
+
+        # Compute training accuracy
+        train_acc = calculate_accuracy(model, train_data, train_labels)
+        val_acc = calculate_accuracy(model, val_data, val_labels)
+        print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {loss.item()}, Train Accuracy: {train_acc}, Validation Accuracy: {val_acc}")
 
     ##########################################################################
     #               END OF YOUR CODE                                         #
